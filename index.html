@@ -520,13 +520,11 @@ board.addEventListener("contextmenu",e=>e.preventDefault());
 
 board.addEventListener("pointerdown",e=>{
   if(e.button!==0) return;
-  // Ignorer si pinch en cours
-  if(pinchDist!==null) return;
   const t=e.target;
-  const onBg=t===board||t===document.getElementById("canvas")||t===document.getElementById("svg-layer")||t===document.getElementById("node-layer");
-  if(!onBg) return;
+  // Pan si clic sur le fond (pas sur un noeud ni ses enfants)
+  if(t.closest(".node")) return;
   e.preventDefault();
-  panState={sx:e.clientX-vx,sy:e.clientY-vy};
+  panState={sx:e.clientX-vx, sy:e.clientY-vy};
   board.style.cursor="grabbing";
   board.setPointerCapture(e.pointerId);
 });
@@ -569,12 +567,7 @@ board.addEventListener("pointercancel",()=>{
 board.addEventListener("wheel",e=>{
   e.preventDefault();
   const b=board.getBoundingClientRect();
-  zoomAt(e.clientX-b.left,e.clientY-b.top,e.deltaY<0?1.1:1/1.1);
-},{passive:false});
-
-
-board.addEventListener("touchend",e=>{
-  if(e.touches.length<2) pinchDist=null;
+  zoomAt(e.clientX-b.left, e.clientY-b.top, e.deltaY<0?1.1:1/1.1);
 },{passive:false});
 
 // ── Video helpers ──
@@ -851,7 +844,9 @@ function render(){
     // Drag
     el.addEventListener("pointerdown",e=>{
       if(e.button!==0)return;
-      if(e.target.closest(".node-btns")||e.target.closest(".url-row")||e.target.closest(".paste-zone")||e.target.closest(".thumb")||e.target.closest(".link-preview")||e.target.closest(".nbtn")||e.target.closest(".node-title")||e.target.closest("td")||e.target.closest(".add-row-btn")||e.target.closest(".tbl-wrap"))return;
+      // Bloquer drag uniquement sur éléments vraiment interactifs
+      const blocked=e.target.closest("button,a,input,textarea,td,[contenteditable]");
+      if(blocked) return;
       e.preventDefault();e.stopPropagation();
       const b=board.getBoundingClientRect();
       dragState={id:n.id,ox:(e.clientX-b.left-vx)/vz-n.x,oy:(e.clientY-b.top-vy)/vz-n.y};
