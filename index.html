@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<title>Canevas Judo</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f0efeb;--surface:#fff;--border:#dddbd3;--text:#1a1a18;--muted:#72706b;
+  --accent:#1a56db;--accent-light:#eff4ff;--accent-border:#93b4f7;
+  --danger:#c0392b;--radius:10px;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;display:flex;flex-direction:column}
+
+/* ── Utilitaires ── */
+.hidden{display:none!important}
+input,textarea,button{font-family:inherit}
+input[type=email],input[type=password],input[type=text]{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;margin-bottom:12px;background:var(--bg);color:var(--text);outline:none}
+input:focus,textarea:focus{border-color:var(--accent)}
+.btn{display:inline-flex;align-items:center;justify-content:center;padding:10px 18px;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;border:none;text-align:center}
+.btn-primary{background:var(--accent);color:#fff;width:100%;margin-bottom:8px}
+.btn-secondary{background:var(--surface);color:var(--text);border:1px solid var(--border);width:100%;margin-bottom:8px}
+.btn-sm{padding:6px 12px;font-size:13px;width:auto;margin-bottom:0}
+.btn-icon{padding:5px 8px;font-size:12px;width:auto;margin-bottom:0;border-radius:7px}
+.err{font-size:13px;color:var(--danger);min-height:18px;margin-top:6px}
+.divider{display:flex;align-items:center;gap:8px;margin:12px 0;font-size:13px;color:var(--muted)}
+.divider::before,.divider::after{content:"";flex:1;border-top:1px solid var(--border)}
+
+/* ── Auth & Join ── */
+#screen-auth,#screen-join{flex:1;display:flex;align-items:center;justify-content:center;padding:24px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:32px;width:100%;max-width:440px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.card h1{font-size:22px;font-weight:700;margin-bottom:4px}
+.card h2{font-size:18px;font-weight:700;margin-bottom:4px}
+.card p{font-size:14px;color:var(--muted);margin-bottom:16px}
+.auth-tabs{display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:20px}
+.auth-tab{flex:1;padding:9px;font-size:14px;font-weight:500;cursor:pointer;background:none;border:none;color:var(--muted)}
+.auth-tab.active{background:var(--accent);color:#fff}
+label{display:block;font-size:13px;font-weight:500;color:var(--muted);margin-bottom:4px}
+.room-item{display:flex;align-items:center;gap:10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:8px}
+.room-info{flex:1;min-width:0}
+.room-name{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.room-meta{font-size:12px;color:var(--muted);margin-top:2px}
+.room-actions{display:flex;gap:6px;flex-shrink:0}
+.btn-open{padding:5px 14px;font-size:13px;border-radius:7px;border:none;background:var(--accent);color:#fff;cursor:pointer}
+.btn-del{padding:5px 8px;font-size:13px;border-radius:7px;border:1px solid #fecaca;background:#fef2f2;color:var(--danger);cursor:pointer}
+.btn-ren{padding:5px 8px;font-size:13px;border-radius:7px;border:1px solid var(--border);background:var(--surface);color:var(--accent);cursor:pointer}
+
+/* ── App shell ── */
+#screen-app{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;gap:8px;flex-wrap:wrap}
+.topbar-left{font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px}
+.topbar-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.code-box{background:var(--accent-light);border:1px solid var(--accent-border);border-radius:8px;padding:5px 12px;font-size:13px;display:flex;align-items:center;gap:8px}
+.code-box code{font-family:monospace;font-size:14px;font-weight:700;color:var(--accent);letter-spacing:2px}
+.badge{font-size:12px;color:var(--muted);background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:3px 10px}
+.page-nav{display:flex;align-items:center;justify-content:center;gap:20px;padding:8px 16px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
+.page-arrow{width:30px;height:30px;border-radius:50%;border:1px solid var(--border);background:var(--bg);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s}
+.page-arrow:hover:not(:disabled){background:var(--accent-light);border-color:var(--accent-border)}
+.page-arrow:disabled{opacity:.3;cursor:default}
+.page-center{text-align:center}
+.page-label{font-size:14px;font-weight:600;min-width:180px}
+.page-dots{display:flex;gap:6px;justify-content:center;margin-top:4px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--border);transition:background .2s}
+.dot.active{background:var(--accent)}
+.page-content{flex:1;overflow:hidden;display:flex;flex-direction:column}
+
+/* ── Pages texte ── */
+.text-page{flex:1;overflow-y:auto;padding:32px;display:none;flex-direction:column;gap:28px}
+.text-page.active{display:flex}
+.text-section{display:flex;flex-direction:column;gap:8px;max-width:800px;width:100%;margin:0 auto}
+.section-header{display:flex;align-items:center;justify-content:space-between;padding-bottom:6px;border-bottom:2px solid var(--accent-light)}
+.section-title{font-size:15px;font-weight:700;color:var(--accent);display:flex;align-items:center;gap:8px}
+
+
+textarea.text-area{width:100%;min-height:120px;border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-size:14px;line-height:1.7;background:var(--surface);color:var(--text);outline:none;resize:none;font-family:inherit;transition:border-color .2s}
+textarea
+textarea
+.save-status{font-size:12px;color:var(--muted);text-align:right;height:16px;transition:opacity .3s}
+
+/* ── Mindmap ── */
+.mindmap-page{flex:1;position:relative;overflow:hidden;display:none;background:var(--bg);touch-action:none}
+.mindmap-page.active{display:block}
+#canvas-wrap{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform}
+#canvas-svg{position:absolute;top:0;left:0;overflow:visible;pointer-events:none}
+#canvas-nodes{position:absolute;top:0;left:0}
+.mm-toolbar{position:absolute;top:12px;left:12px;z-index:20;display:flex;gap:8px}
+.mm-hint{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);z-index:20;font-size:12px;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 12px;pointer-events:none;white-space:nowrap}
+.mm-zoom{position:absolute;bottom:12px;right:12px;z-index:20;display:flex;flex-direction:column;gap:4px}
+.mm-zoom button{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--surface);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.mm-zoom button:hover{background:var(--accent-light)}
+
+/* ── Noeuds ── */
+.node{position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 1px 4px rgba(0,0,0,.07);cursor:grab;min-width:160px;max-width:240px}
+.node.root-node{background:var(--accent-light);border-color:var(--accent-border)}
+.node-head{padding:10px 13px;display:flex;align-items:center;gap:6px}
+.node-icon{flex-shrink:0;font-size:14px;pointer-events:none}
+.node-title{font-size:13px;font-weight:500;color:var(--text);flex:1;word-break:break-word;line-height:1.4;cursor:pointer}
+.node-title.root-title{color:var(--accent)}
+.node-btns{display:flex;gap:3px;flex-shrink:0;opacity:0;transition:opacity .15s;pointer-events:none}
+@media(hover:none){.node-btns{opacity:1;pointer-events:all}}
+@media(hover:hover){.node:hover .node-btns{opacity:1;pointer-events:all}}
+.nbtn{width:24px;height:24px;border-radius:50%;border:1px solid var(--border);background:var(--surface);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:12px;padding:0;flex-shrink:0}
+.nbtn:hover{background:var(--bg)}
+.node-body{padding:0 9px 9px}
+/* Video */
+.thumb{position:relative;width:100%;padding-bottom:56%;border-radius:7px;overflow:hidden;background:#111;cursor:pointer}
+.thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.85}
+.thumb-play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.2)}
+.thumb-play span{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.95);display:flex;align-items:center;justify-content:center;font-size:14px}
+.thumb-src{position:absolute;bottom:4px;right:6px;font-size:10px;color:#fff;background:rgba(0,0,0,.5);padding:1px 5px;border-radius:4px}
+.paste-area{position:relative;width:100%;padding-bottom:46%;border-radius:7px;background:var(--bg);border:1px dashed var(--border);cursor:pointer}
+.paste-area-inner{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:12px;color:var(--muted)}
+.url-form{display:flex;gap:6px;margin-top:6px}
+.url-form input{flex:1;min-width:0;font-size:12px;padding:7px 9px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);outline:none;margin-bottom:0}
+.url-form input:focus{border-color:var(--accent)}
+.url-form button{padding:7px 12px;font-size:12px;border-radius:7px;border:none;background:var(--accent);color:#fff;cursor:pointer;flex-shrink:0}
+.url-err{font-size:11px;color:var(--danger);margin-top:4px}
+/* Lien */
+.link-card{display:flex;align-items:center;gap:8px;margin-top:6px;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:7px;cursor:pointer;text-decoration:none;transition:border-color .15s}
+.link-card:hover{border-color:var(--accent);background:var(--accent-light)}
+.link-icon{font-size:18px;flex-shrink:0}
+.link-info{flex:1;min-width:0}
+.link-label{font-size:12px;font-weight:600;color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.link-domain{font-size:11px;color:var(--muted)}
+/* Tableau */
+.tbl-wrap{overflow-x:auto;margin-top:6px}
+table.etbl{width:100%;border-collapse:collapse;font-size:12px}
+table.etbl th{background:var(--accent-light);color:var(--accent);font-weight:600;padding:5px 7px;border:1px solid var(--accent-border);text-align:left;white-space:nowrap}
+table.etbl td{padding:4px 6px;border:1px solid var(--border);vertical-align:top;min-width:50px;outline:none}
+table.etbl td[contenteditable]:focus{background:var(--accent-light)}
+table.etbl tr:nth-child(even) td{background:#fafaf9}
+.add-row{font-size:11px;color:var(--muted);background:none;border:none;cursor:pointer;padding:4px 0;margin-top:4px;display:flex;align-items:center;gap:3px}
+.add-row:hover{color:var(--accent)}
+.collapse-info{font-size:11px;color:var(--muted);margin-top:3px;padding:0 13px 8px}
+
+/* ── Modal vidéo ── */
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:200;display:none;align-items:center;justify-content:center;padding:30px}
+#modal.open{display:flex}
+.modal-inner{position:relative;width:100%;max-width:800px}
+.modal-close{position:absolute;top:-44px;right:0;width:34px;height:34px;border-radius:50%;background:#fff;border:none;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center}
+.modal-frame{position:relative;width:100%;padding-bottom:56%;border-radius:12px;overflow:hidden;background:#000}
+.modal-frame iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+</style>
+</head>
+<body>
+
+<!-- AUTH -->
+<div id="screen-auth">
+  <div class="card">
+    <h1>🥋 Canevas Judo</h1>
+    <p>Plateforme coach / athlète</p>
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="switchAuthTab('login')">Connexion</button>
+      <button class="auth-tab" onclick="switchAuthTab('register')">Inscription</button>
+    </div>
+    <div id="tab-login">
+      <label>Email</label><input type="email" id="l-email" placeholder="votre@email.com"/>
+      <label>Mot de passe</label><input type="password" id="l-pwd" placeholder="••••••••"/>
+      <button class="btn btn-primary" onclick="doLogin()">Se connecter</button>
+      <div class="err" id="l-err"></div>
+    </div>
+    <div id="tab-reg" style="display:none">
+      <label>Prénom / Pseudo</label><input type="text" id="r-name" placeholder="Coach Martin"/>
+      <label>Email</label><input type="email" id="r-email" placeholder="votre@email.com"/>
+      <label>Mot de passe</label><input type="password" id="r-pwd" placeholder="6 caractères minimum"/>
+      <button class="btn btn-primary" onclick="doRegister()">Créer mon compte</button>
+      <div class="err" id="r-err"></div>
+    </div>
+  </div>
+</div>
+
+<!-- JOIN -->
+<div id="screen-join" class="hidden">
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div><h2>Bonjour, <span id="j-name"></span> 👋</h2><p style="margin:0">Vos canevas</p></div>
+      <button class="btn btn-secondary btn-sm" onclick="doLogout()">Déconnexion</button>
+    </div>
+    <div id="room-list" style="margin-bottom:14px"><div style="font-size:13px;color:var(--muted)">Chargement…</div></div>
+    <button class="btn btn-primary" id="create-btn" onclick="doCreate()">➕ Créer un nouveau canevas</button>
+    <div class="divider">ou rejoindre via un code</div>
+    <div style="display:flex;gap:8px">
+      <input type="text" id="j-code" placeholder="ABC123" maxlength="6" style="text-transform:uppercase;letter-spacing:3px;font-weight:600;margin-bottom:0;flex:1"/>
+      <button class="btn btn-secondary" onclick="doJoin()" style="width:auto;white-space:nowrap;margin-bottom:0">Rejoindre</button>
+    </div>
+    <div class="err" id="j-err"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="screen-app" class="hidden">
+  <div class="topbar">
+    <div class="topbar-left">🥋 <span id="room-name-lbl">Canevas</span></div>
+    <div class="topbar-right">
+      <div class="code-box">Code : <code id="room-code-lbl"></code><button class="btn btn-secondary btn-sm" onclick="copyCode()">Copier</button></div>
+      <span class="badge" id="user-lbl"></span>
+      <button class="btn btn-secondary btn-sm" onclick="goJoin()">Mes canevas</button>
+      <button class="btn btn-secondary btn-sm" onclick="doLogout()">Déconnexion</button>
+    </div>
+  </div>
+  <div class="page-nav">
+    <button class="page-arrow" id="prev-btn" onclick="changePage(-1)" disabled>←</button>
+    <div class="page-center">
+      <div class="page-label" id="page-label">Mindmap</div>
+      <div class="page-dots">
+        <div class="dot" id="dot0"></div>
+        <div class="dot active" id="dot1"></div>
+        <div class="dot" id="dot2"></div>
+      </div>
+    </div>
+    <button class="page-arrow" id="next-btn" onclick="changePage(1)">→</button>
+  </div>
+  <div class="page-content">
+
+    <!-- Page 1 : Techniques -->
+    <div class="text-page" id="page-0">
+      <div class="text-section">
+        <div class="section-header">
+          <div class="section-title">✅ Techniques acquises</div>
+        </div>
+        <textarea class="text-area" id="ta-acquired" placeholder="Liste des techniques maîtrisées…" oninput="scheduleSave()"></textarea>
+      </div>
+      <div class="text-section">
+        <div class="section-header">
+          <div class="section-title">🔄 En cours d'acquisition</div>
+        </div>
+        <textarea class="text-area" id="ta-progress" placeholder="Techniques en cours de travail…" oninput="scheduleSave()"></textarea>
+      </div>
+      <div class="text-section">
+        <div class="section-header">
+          <div class="section-title">🎯 Techniques souhaitées</div>
+        </div>
+        <textarea class="text-area" id="ta-wanted" placeholder="Techniques à apprendre…" oninput="scheduleSave()"></textarea>
+        <div class="save-status" id="save-status-1"></div>
+      </div>
+    </div>
+
+    <!-- Page 2 : Mindmap -->
+    <div class="mindmap-page active" id="page-1">
+      <div id="canvas-wrap">
+        <svg id="canvas-svg"></svg>
+        <div id="canvas-nodes"></div>
+      </div>
+      <div class="mm-toolbar">
+        <button class="btn btn-primary btn-sm" onclick="addRoot()">➕ Nouveau point de départ</button>
+      </div>
+      <div class="mm-hint">Glisser le fond = déplacer · Molette = zoom</div>
+      <div class="mm-zoom">
+        <button onclick="zoomBtn(1.2)" title="Zoom +">+</button>
+        <button onclick="zoomBtn(1/1.2)" title="Zoom −">−</button>
+        <button onclick="resetView()" title="Recentrer">⌂</button>
+      </div>
+    </div>
+
+    <!-- Page 3 : Notes -->
+    <div class="text-page" id="page-2">
+      <div class="text-section">
+        <div class="section-header">
+          <div class="section-title">📋 Notes du coach</div>
+        </div>
+        <textarea class="text-area" id="ta-coach" placeholder="Observations, consignes, retours…" oninput="scheduleSave()"></textarea>
+      </div>
+      <div class="text-section">
+        <div class="section-header">
+          <div class="section-title">👤 Notes de l'athlète</div>
+        </div>
+        <textarea class="text-area" id="ta-athlete" placeholder="Ressenti, questions, objectifs…" oninput="scheduleSave()"></textarea>
+        <div class="save-status" id="save-status-3"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODAL -->
+<div id="modal">
+  <div class="modal-inner">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-frame"><iframe id="modal-iframe" allowfullscreen allow="autoplay;fullscreen"></iframe></div>
+  </div>
+</div>
+
+<script>
+// ══ Firebase ══
+firebase.initializeApp({
+  apiKey:"AIzaSyACsK1wHqdVKgXwnoTlt4ay2-Mq4w23Jqo",
+  authDomain:"canevas-judo.firebaseapp.com",
+  projectId:"canevas-judo",
+  storageBucket:"canevas-judo.firebasestorage.app",
+  messagingSenderId:"560946340986",
+  appId:"1:560946340986:web:1530edfaf5724d9dba07c3"
+});
+const auth=firebase.auth();
+const db=firebase.firestore();
+
+// ══ État global ══
+let gUser=null, gRoom=null, gNodes=[], gUnsub=null;
+let gCollapsed={};
+let gUrlEditId=null, gUrlDraft='', gUrlErr=null;
+let gSaveTimer=null;
+let gCurrentPage=1; // 0=techniques, 1=mindmap, 2=notes
+const PAGE_LABELS=['Techniques','Mindmap','Notes libres'];
+
+// ══ Écrans ══
+function showScreen(id){
+  ['screen-auth','screen-join','screen-app'].forEach(s=>{
+    const el=document.getElementById(s);
+    if(s===id) el.classList.remove('hidden');
+    else el.classList.add('hidden');
+  });
+}
+
+// ══ Pages ══
+function changePage(dir){
+  gCurrentPage=Math.max(0,Math.min(2,gCurrentPage+dir));
+  renderPageNav();
+}
+function renderPageNav(){
+  ['page-0','page-1','page-2'].forEach((id,i)=>{
+    const el=document.getElementById(id);
+    if(i===gCurrentPage){
+      if(id==='page-1') el.classList.add('active');
+      else el.classList.add('active');
+    } else {
+      el.classList.remove('active');
+    }
+  });
+  document.getElementById('page-label').textContent=PAGE_LABELS[gCurrentPage];
+  ['dot0','dot1','dot2'].forEach((id,i)=>document.getElementById(id).classList.toggle('active',i===gCurrentPage));
+  document.getElementById('prev-btn').disabled=gCurrentPage===0;
+  document.getElementById('next-btn').disabled=gCurrentPage===2;
+}
+
+// ══ Auth ══
+function switchAuthTab(t){
+  document.getElementById('tab-login').style.display=t==='login'?'':'none';
+  document.getElementById('tab-reg').style.display=t==='login'?'none':'';
+  document.querySelectorAll('.auth-tab').forEach((b,i)=>b.classList.toggle('active',(i===0&&t==='login')||(i===1&&t==='register')));
+}
+function setErr(id,msg){document.getElementById(id).textContent=msg;}
+function xlat(c){return({'auth/invalid-email':'Email invalide.','auth/user-not-found':'Compte introuvable.','auth/wrong-password':'Mot de passe incorrect.','auth/invalid-credential':'Email ou mot de passe incorrect.','auth/email-already-in-use':'Email déjà utilisé.','auth/weak-password':'Mot de passe trop court.'})[c]||'Erreur : '+c;}
+async function doLogin(){
+  setErr('l-err','');
+  try{await auth.signInWithEmailAndPassword(document.getElementById('l-email').value.trim(),document.getElementById('l-pwd').value);}
+  catch(e){setErr('l-err',xlat(e.code));}
+}
+async function doRegister(){
+  setErr('r-err','');
+  const name=document.getElementById('r-name').value.trim();
+  if(!name){setErr('r-err','Entrez un prénom.');return;}
+  try{
+    const c=await auth.createUserWithEmailAndPassword(document.getElementById('r-email').value.trim(),document.getElementById('r-pwd').value);
+    await c.user.updateProfile({displayName:name});
+  }catch(e){setErr('r-err',xlat(e.code));}
+}
+async function doLogout(){
+  if(gUnsub){gUnsub();gUnsub=null;}
+  gRoom=null;gNodes=[];gCollapsed={};
+  await auth.signOut();
+}
+auth.onAuthStateChanged(u=>{
+  gUser=u;
+  if(!u){showScreen('screen-auth');}
+  else if(!gRoom){showScreen('screen-join');document.getElementById('j-name').textContent=u.displayName||u.email;loadRooms();}
+});
+
+// ══ Rooms ══
+function genCode(){return Math.random().toString(36).substring(2,8).toUpperCase();}
+async function loadRooms(){
+  const list=document.getElementById('room-list');
+  list.innerHTML='<div style="font-size:13px;color:var(--muted)">Chargement…</div>';
+  try{
+    const snap=await db.collection('rooms').where('createdBy','==',gUser.uid).orderBy('createdAt','desc').get();
+    const jDoc=await db.collection('userRooms').doc(gUser.uid).get();
+    const jCodes=(jDoc.exists&&jDoc.data().rooms)||[];
+    const owned=snap.docs.map(d=>({code:d.id,...d.data(),owned:true}));
+    const joined=[];
+    for(const code of jCodes){
+      if(!owned.find(r=>r.code===code)){
+        const s=await db.collection('rooms').doc(code).get();
+        if(s.exists) joined.push({code,...s.data(),owned:false});
+      }
+    }
+    list.innerHTML='';
+    const all=[...owned,...joined];
+    if(!all.length){list.innerHTML='<div style="font-size:13px;color:var(--muted);padding:8px 0 14px">Aucun canevas pour l\'instant.</div>';return;}
+    all.forEach(r=>{
+      const item=document.createElement('div');item.className='room-item';
+      const info=document.createElement('div');info.className='room-info';
+      const date=r.createdAt?new Date(r.createdAt.seconds*1000).toLocaleDateString('fr-FR'):'';
+      info.innerHTML='<div class="room-name">'+(r.name||'Canevas '+r.code)+'</div><div class="room-meta">'+(r.owned?'Créé par vous':'Rejoint')+(date?' · '+date:'')+'  · Code : <strong>'+r.code+'</strong></div>';
+      const acts=document.createElement('div');acts.className='room-actions';
+      if(r.owned){
+        const ren=document.createElement('button');ren.className='btn-ren';ren.textContent='✎';ren.title='Renommer';ren.onclick=()=>renameRoom(r.code);
+        const del=document.createElement('button');del.className='btn-del';del.textContent='🗑';del.title='Supprimer';del.onclick=()=>deleteRoom(r.code);
+        acts.appendChild(ren);acts.appendChild(del);
+      }
+      const open=document.createElement('button');open.className='btn-open';open.textContent='Ouvrir';open.onclick=()=>openRoom(r.code);
+      acts.appendChild(open);item.appendChild(info);item.appendChild(acts);list.appendChild(item);
+    });
+  }catch(e){list.innerHTML='<div style="font-size:13px;color:var(--danger)">Erreur : '+e.message+'</div>';}
+}
+async function doCreate(){
+  setErr('j-err','');
+  const name=prompt('Nom du canevas :','Mon canevas');if(name===null)return;
+  const btn=document.getElementById('create-btn');btn.disabled=true;btn.textContent='Création…';
+  try{
+    const code=genCode();
+    await db.collection('rooms').doc(code).set({
+      createdBy:gUser.uid,name:name.trim()||'Mon canevas',
+      createdAt:firebase.firestore.FieldValue.serverTimestamp(),
+      nodes:[],texts:{acquired:'',progress:'',wanted:'',coach:'',athlete:''}
+    });
+    btn.disabled=false;btn.textContent='➕ Créer un nouveau canevas';
+    openRoom(code);
+  }catch(e){setErr('j-err','Erreur : '+e.message);btn.disabled=false;btn.textContent='➕ Créer un nouveau canevas';}
+}
+async function doJoin(){
+  setErr('j-err','');
+  const code=document.getElementById('j-code').value.trim().toUpperCase();
+  if(code.length!==6){setErr('j-err','Code de 6 caractères requis.');return;}
+  try{const s=await db.collection('rooms').doc(code).get();if(!s.exists){setErr('j-err','Aucun canevas trouvé.');return;}openRoom(code);}
+  catch(e){setErr('j-err','Erreur : '+e.message);}
+}
+async function renameRoom(code){
+  const s=await db.collection('rooms').doc(code).get();
+  const cur=(s.exists&&s.data().name)||'Mon canevas';
+  const n=prompt('Nouveau nom :',cur);
+  if(n&&n.trim()){await db.collection('rooms').doc(code).update({name:n.trim()});loadRooms();}
+}
+async function deleteRoom(code){
+  if(!confirm('Supprimer définitivement ce canevas ?'))return;
+  try{
+    await db.collection('rooms').doc(code).delete();
+    await db.collection('userRooms').doc(gUser.uid).update({rooms:firebase.firestore.FieldValue.arrayRemove(code)}).catch(()=>{});
+    loadRooms();
+  }catch(e){alert('Erreur : '+e.message);}
+}
+function openRoom(code){
+  gRoom=code;
+  document.getElementById('room-code-lbl').textContent=code;
+  document.getElementById('user-lbl').textContent=gUser.displayName||gUser.email;
+  showScreen('screen-app');
+  gCurrentPage=1;renderPageNav();resetView();
+  db.collection('userRooms').doc(gUser.uid).set({rooms:firebase.firestore.FieldValue.arrayUnion(code)},{merge:true}).catch(()=>{});
+  if(gUnsub)gUnsub();
+  gUnsub=db.collection('rooms').doc(gRoom).onSnapshot(snap=>{
+    if(!snap.exists)return;
+    const d=snap.data();
+    gNodes=d.nodes||[];
+    document.getElementById('room-name-lbl').textContent=d.name||'Canevas';
+    const t=d.texts||{};
+    document.getElementById('ta-acquired').value=t.acquired||'';
+    document.getElementById('ta-progress').value=t.progress||'';
+    document.getElementById('ta-wanted').value=t.wanted||'';
+    document.getElementById('ta-coach').value=t.coach||'';
+    document.getElementById('ta-athlete').value=t.athlete||'';
+    renderMindmap();
+  });
+}
+function goJoin(){if(gUnsub){gUnsub();gUnsub=null;}gRoom=null;gNodes=[];gCollapsed={};showScreen('screen-join');loadRooms();}
+function copyCode(){navigator.clipboard.writeText(gRoom).then(()=>alert('Code copié : '+gRoom));}
+
+// ══ Textes ══
+function scheduleSave(){clearTimeout(gSaveTimer);gSaveTimer=setTimeout(saveTexts,1200);}
+async function saveTexts(){
+  if(!gRoom)return;
+  const texts={acquired:document.getElementById('ta-acquired').value,progress:document.getElementById('ta-progress').value,wanted:document.getElementById('ta-wanted').value,coach:document.getElementById('ta-coach').value,athlete:document.getElementById('ta-athlete').value};
+  await db.collection('rooms').doc(gRoom).update({texts});
+  ['save-status-1','save-status-3'].forEach(id=>{const el=document.getElementById(id);if(el){el.textContent='✓ Sauvegardé';el.style.opacity='1';setTimeout(()=>el.style.opacity='0',2000);}});
+}
+
+// ══ Firestore nodes ══
+async function saveNodes(){
+  if(!gRoom)return;
+  await db.collection('rooms').doc(gRoom).update({nodes:JSON.parse(JSON.stringify(gNodes))});
+}
+
+// ══ Mindmap canvas ══
+let vx=0,vy=0,vz=1;
+let mmPan=null,mmDrag=null;
+
+function applyTransform(){
+  document.getElementById('canvas-wrap').style.transform='translate3d('+vx+'px,'+vy+'px,0) scale('+vz+')';
+}
+function zoomAt(px,py,factor){
+  const nz=Math.min(4,Math.max(0.1,vz*factor));
+  vx=px-(px-vx)*(nz/vz);
+  vy=py-(py-vy)*(nz/vz);
+  vz=nz;
+  applyTransform();
+}
+function zoomBtn(f){
+  const mm=document.getElementById('page-1');
+  zoomAt(mm.offsetWidth/2,mm.offsetHeight/2,f);
+}
+function resetView(){vx=60;vy=60;vz=1;applyTransform();}
+
+// Pointer events sur le canvas
+const mm=document.getElementById('page-1');
+
+
+
+// Touch events pour mobile (pan 1 doigt)
+// Gestion multi-touch via pointer events (fonctionne sur iOS/Android)
+const mmPointers=new Map();
+function mmGetPinchDist(){
+  const pts=[...mmPointers.values()];
+  if(pts.length<2) return null;
+  return Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y);
+}
+function mmGetPinchCenter(){
+  const pts=[...mmPointers.values()];
+  const r=mm.getBoundingClientRect();
+  return{x:(pts[0].x+pts[1].x)/2-r.left,y:(pts[0].y+pts[1].y)/2-r.top};
+}
+let mmLastPinchDist=null;
+
+mm.addEventListener('pointerdown',e=>{
+  // Ne rien faire si clic sur un bouton ou élément interactif
+  if(e.target.closest('.node-btns')) return;
+  if(e.target.closest('button,a,input,textarea,td,[contenteditable]')) return;
+
+  mmPointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+
+  if(mmPointers.size===1){
+    const nodeEl=e.target.closest('.node');
+    if(nodeEl){
+      // Drag du noeud
+      e.preventDefault();
+      const r=mm.getBoundingClientRect();
+      const nid=nodeEl.dataset.id;
+      const node=gNodes.find(n=>n.id===nid);
+      if(node){
+        mmDrag={id:nid,ox:(e.clientX-r.left-vx)/vz-node.x,oy:(e.clientY-r.top-vy)/vz-node.y};
+        mm.style.cursor='grabbing';
+        mm.setPointerCapture(e.pointerId);
+      }
+    } else {
+      // Pan sur le fond
+      e.preventDefault();
+      mmPan={sx:e.clientX-vx,sy:e.clientY-vy};
+      mmLastPinchDist=null;
+      mm.setPointerCapture(e.pointerId);
+    }
+  } else if(mmPointers.size===2){
+    mmPan=null;mmDrag=null;
+    mmLastPinchDist=mmGetPinchDist();
+    mm.setPointerCapture(e.pointerId);
+  }
+},{capture:false});
+
+mm.addEventListener('pointermove',e=>{
+  if(!mmPointers.has(e.pointerId)) return;
+  mmPointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(mmPointers.size===2&&mmLastPinchDist){
+    const newDist=mmGetPinchDist();
+    const center=mmGetPinchCenter();
+    if(newDist&&newDist>0) zoomAt(center.x,center.y,newDist/mmLastPinchDist);
+    mmLastPinchDist=newDist;
+  } else if(mmPointers.size===1){
+    if(mmDrag){
+      const r=mm.getBoundingClientRect();
+      const node=gNodes.find(n=>n.id===mmDrag.id);
+      if(node){
+        node.x=(e.clientX-r.left-vx)/vz-mmDrag.ox;
+        node.y=(e.clientY-r.top-vy)/vz-mmDrag.oy;
+        const el=document.querySelector('.node[data-id="'+node.id+'"]');
+        if(el){el.style.left=node.x+'px';el.style.top=node.y+'px';}
+        drawLines();
+      }
+    } else if(mmPan){
+      vx=e.clientX-mmPan.sx;
+      vy=e.clientY-mmPan.sy;
+      applyTransform();
+    }
+  }
+});
+
+mm.addEventListener('pointerup',e=>{
+  mmPointers.delete(e.pointerId);
+  if(mmPointers.size<2) mmLastPinchDist=null;
+  if(mmPointers.size===0){
+    if(mmDrag){mmDrag=null;mm.style.cursor='default';saveNodes();}
+    else if(mmPan){mmPan=null;mm.style.cursor='default';}
+  }
+});
+mm.addEventListener('pointercancel',e=>{
+  mmPointers.delete(e.pointerId);
+  if(mmPointers.size===0){
+    mmDrag=null;mmPan=null;mmLastPinchDist=null;
+    mm.style.cursor='default';
+  }
+});
+
+mm.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const r=mm.getBoundingClientRect();
+  zoomAt(e.clientX-r.left,e.clientY-r.top,e.deltaY<0?1.1:1/1.1);
+},{passive:false});
+
+// ══ Nodes helpers ══
+function nid(){return 'n'+Date.now()+Math.random().toString(36).slice(2,5);}
+function addRoot(){
+  const mm=document.getElementById('page-1');
+  const cx=(mm.offsetWidth/2-vx)/vz;
+  const cy=(mm.offsetHeight/2-vy)/vz;
+  gNodes.push({id:nid(),x:cx,y:cy,type:'text',title:'Nouveau point de départ',parent:null,isRoot:true});
+  saveNodes();
+}
+function addChild(pid,type){
+  const p=gNodes.find(n=>n.id===pid);if(!p)return;
+  const a=Math.random()*Math.PI*2;
+  const d=type==='video'?230:type==='table'?270:type==='link'?200:170;
+  const id=nid();
+  const base={id,type,parent:pid,isRoot:false,x:p.x+Math.cos(a)*d,y:p.y+Math.sin(a)*d};
+  if(type==='video') Object.assign(base,{title:'Nouvelle vidéo',videoId:null,provider:null});
+  else if(type==='table') Object.assign(base,{title:'Tableau',rows:[['','',''],['','',''],['','','']]});
+  else if(type==='link') Object.assign(base,{title:'Lien externe',url:null});
+  else Object.assign(base,{title:'Nouvelle note'});
+  gNodes.push(base);
+  if(gCollapsed[pid])gCollapsed[pid]=false;
+  if(type==='video'||type==='link'){gUrlEditId=id;gUrlDraft='';gUrlErr=null;}
+  saveNodes();
+}
+function delNode(id){
+  if(!confirm('Supprimer ce nœud et ses enfants ?'))return;
+  const toDelete=new Set([id]);
+  let changed=true;
+  while(changed){changed=false;gNodes.forEach(n=>{if(n.parent&&toDelete.has(n.parent)&&!toDelete.has(n.id)){toDelete.add(n.id);changed=true;}});}
+  gNodes=gNodes.filter(n=>!toDelete.has(n.id));
+  saveNodes();
+}
+function renameNode(id){
+  const node=gNodes.find(n=>n.id===id);if(!node)return;
+  const v=prompt('Nouveau nom :',node.title);
+  if(v!==null&&v.trim()){node.title=v.trim();saveNodes();}
+}
+function toggleCollapse(id){gCollapsed[id]=!gCollapsed[id];renderMindmap();}
+function commitUrl(id,val){
+  const node=gNodes.find(n=>n.id===id);
+  const t=(val||'').trim();
+  if(!t){gUrlErr=id;renderMindmap();return;}
+  if(node.type==='link'){
+    try{new URL(t);}catch{gUrlErr=id;renderMindmap();return;}
+    node.url=t;gUrlEditId=null;gUrlErr=null;gUrlDraft='';saveNodes();return;
+  }
+  const p=parseVideoUrl(t);
+  if(!p){gUrlErr=id;renderMindmap();return;}
+  node.provider=p.provider;node.videoId=p.videoId;
+  gUrlEditId=null;gUrlErr=null;gUrlDraft='';saveNodes();
+}
+function saveCell(nid,ri,ci,val){
+  const node=gNodes.find(n=>n.id===nid);
+  if(!node||!node.rows||!node.rows[ri])return;
+  node.rows[ri][ci]=val;saveNodes();
+}
+function addTableRow(nid){
+  const node=gNodes.find(n=>n.id===nid);if(!node||!node.rows)return;
+  node.rows.push(['','','']);saveNodes();
+}
+function delTableRow(nid,ri){
+  const node=gNodes.find(n=>n.id===nid);if(!node||!node.rows||node.rows.length<=1)return;
+  node.rows.splice(ri,1);saveNodes();
+}
+
+// ══ Video / link helpers ══
+function parseVideoUrl(raw){
+  const u=(raw||'').trim();
+  let m=u.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{6,})/);
+  if(m)return{provider:'youtube',videoId:m[1]};
+  m=u.match(/vimeo\.com\/(?:video\/)?([0-9]+)/);
+  if(m)return{provider:'vimeo',videoId:m[1]};
+  return null;
+}
+function embedUrl(n){return n.provider==='vimeo'?'https://player.vimeo.com/video/'+n.videoId+'?autoplay=1':'https://www.youtube.com/embed/'+n.videoId+'?autoplay=1';}
+function thumbUrl(n){return n.provider==='vimeo'?null:'https://img.youtube.com/vi/'+n.videoId+'/hqdefault.jpg';}
+function linkIcon(url){
+  if(/instagram/.test(url))return '📸';
+  if(/tiktok/.test(url))return '🎵';
+  if(/facebook|fb\.com/.test(url))return '📘';
+  if(/twitter|x\.com/.test(url))return '🐦';
+  if(/drive\.google/.test(url))return '📄';
+  if(/dropbox/.test(url))return '📁';
+  return '🔗';
+}
+function linkDomain(url){try{return new URL(url).hostname.replace('www.','');}catch{return url.slice(0,30);}}
+
+// ══ Modal ══
+function openModal(id){
+  const n=gNodes.find(x=>x.id===id);if(!n||!n.videoId)return;
+  document.getElementById('modal-iframe').src=embedUrl(n);
+  document.getElementById('modal').classList.add('open');
+}
+function closeModal(){document.getElementById('modal').classList.remove('open');document.getElementById('modal-iframe').src='';}
+document.getElementById('modal').addEventListener('click',e=>{if(e.target===document.getElementById('modal'))closeModal();});
+
+// ══ Lignes SVG ══
+function getHidden(){
+  const hidden=new Set();
+  gNodes.forEach(n=>{
+    if(!gCollapsed[n.id])return;
+    const q=[n.id];
+    while(q.length){const cur=q.shift();gNodes.forEach(x=>{if(x.parent===cur&&!hidden.has(x.id)){hidden.add(x.id);q.push(x.id);}});}
+  });
+  return hidden;
+}
+function drawLines(){
+  const sv=document.getElementById('canvas-svg');
+  sv.innerHTML='';
+  const hidden=getHidden();
+  gNodes.forEach(n=>{
+    if(!n.parent||hidden.has(n.id))return;
+    const p=gNodes.find(x=>x.id===n.parent);if(!p||hidden.has(p.id))return;
+    const line=document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1',p.x);line.setAttribute('y1',p.y);
+    line.setAttribute('x2',n.x);line.setAttribute('y2',n.y);
+    line.setAttribute('stroke','#d0cec7');line.setAttribute('stroke-width','1.5');
+    sv.appendChild(line);
+  });
+}
+
+// ══ Rendu noeuds ══
+function renderMindmap(){
+  const nl=document.getElementById('canvas-nodes');
+  nl.innerHTML='';
+  drawLines();
+  const hidden=getHidden();
+
+  gNodes.forEach(n=>{
+    if(hidden.has(n.id))return;
+    const isVid=n.type==='video';
+    const isTbl=n.type==='table';
+    const isLnk=n.type==='link';
+    const isUrlEdit=gUrlEditId===n.id;
+    const hasChildren=gNodes.some(x=>x.parent===n.id);
+    const isColl=!!gCollapsed[n.id];
+
+    const el=document.createElement('div');
+    el.className='node'+(n.isRoot?' root-node':'');
+    el.dataset.id=n.id;
+    el.style.left=n.x+'px';
+    el.style.top=n.y+'px';
+    el.style.transform='translate(-50%,-50%)';
+
+    // Boutons survol
+    const btns=document.createElement('div');btns.className='node-btns';
+    [{e:'📝',t:'Note',cb:()=>addChild(n.id,'text')},
+     {e:'🎬',t:'Vidéo',cb:()=>addChild(n.id,'video')},
+     {e:'📋',t:'Tableau',cb:()=>addChild(n.id,'table')},
+     {e:'🔗',t:'Lien',cb:()=>addChild(n.id,'link')},
+     {e:'✏️',t:'Renommer',cb:()=>renameNode(n.id)},
+     {e:'🗑',t:'Supprimer',cb:()=>delNode(n.id)},
+    ].forEach(({e,t,cb})=>{
+      const b=document.createElement('button');b.className='nbtn';b.textContent=e;b.title=t;
+      b.addEventListener('pointerdown',ev=>{ev.stopPropagation();ev.preventDefault();});
+      b.addEventListener('click',ev=>{ev.stopPropagation();cb();});
+      b.addEventListener('touchend',ev=>{ev.stopPropagation();ev.preventDefault();cb();});
+      btns.appendChild(b);
+    });
+    el.appendChild(btns);
+
+    // En-tête
+    const head=document.createElement('div');head.className='node-head';
+    const icon=document.createElement('span');icon.className='node-icon';
+    icon.textContent=n.isRoot?'📍':isVid?'🎬':isTbl?'📋':isLnk?'🔗':'';
+    if(icon.textContent)head.appendChild(icon);
+
+    const title=document.createElement('div');
+    title.className='node-title'+(n.isRoot?' root-title':'');
+    title.textContent=n.title;title.title='Cliquer pour renommer';
+    title.addEventListener('pointerdown',ev=>ev.stopPropagation());
+    title.addEventListener('click',ev=>{ev.stopPropagation();renameNode(n.id);});
+    head.appendChild(title);
+
+    if(hasChildren){
+      const cb=document.createElement('button');cb.className='nbtn';cb.style.cssText='width:20px;height:20px;font-size:10px;flex-shrink:0';
+      cb.textContent=isColl?'▶':'▼';cb.title=isColl?'Déplier':'Plier';
+      cb.addEventListener('click',ev=>{ev.stopPropagation();toggleCollapse(n.id);});
+      head.appendChild(cb);
+    }
+    if((isVid||isLnk)&&(n.videoId||n.url)&&!isUrlEdit){
+      const eb=document.createElement('button');eb.className='nbtn';eb.style.cssText='width:20px;height:20px;flex-shrink:0';eb.textContent='✏️';
+      eb.addEventListener('click',ev=>{ev.stopPropagation();gUrlEditId=n.id;gUrlDraft='';gUrlErr=null;renderMindmap();setTimeout(()=>{const i=document.querySelector('.url-form input');if(i)i.focus();},0);});
+      head.appendChild(eb);
+    }
+    el.appendChild(head);
+
+    // Corps
+    const body=document.createElement('div');body.className='node-body';
+
+    if(isColl&&hasChildren){
+      const ci=document.createElement('div');ci.className='collapse-info';
+      const cnt=gNodes.filter(x=>x.parent===n.id).length;
+      ci.textContent=cnt+' élément'+(cnt>1?'s':'')+' masqué'+(cnt>1?'s':'');
+      body.appendChild(ci);el.appendChild(body);nl.appendChild(el);return;
+    }
+
+    // Formulaire URL (vidéo + lien)
+    if((isVid||isLnk)&&isUrlEdit){
+      const form=document.createElement('div');form.className='url-form';
+      const inp=document.createElement('input');
+      inp.placeholder=isVid?'Lien YouTube ou Vimeo':'Lien (Instagram, TikTok, Drive…)';
+      inp.value=gUrlDraft;
+      inp.addEventListener('pointerdown',e=>e.stopPropagation());
+      inp.addEventListener('input',e=>gUrlDraft=e.target.value);
+      inp.addEventListener('paste',e=>e.stopPropagation());
+      inp.addEventListener('keydown',e=>{e.stopPropagation();if(e.key==='Enter'){e.preventDefault();commitUrl(n.id,inp.value);}if(e.key==='Escape'){gUrlEditId=null;gUrlErr=null;renderMindmap();}});
+      const ok=document.createElement('button');ok.textContent='OK';
+      ok.addEventListener('click',ev=>{ev.stopPropagation();commitUrl(n.id,inp.value);});
+      form.appendChild(inp);form.appendChild(ok);body.appendChild(form);
+      if(gUrlErr===n.id){const msg=document.createElement('div');msg.className='url-err';msg.textContent=isVid?'Lien non reconnu':'Lien invalide';body.appendChild(msg);}
+    } else if(isVid){
+      if(n.videoId){
+        const thumb=document.createElement('div');thumb.className='thumb';
+        const t=thumbUrl(n);
+        if(t){const img=document.createElement('img');img.src=t;thumb.appendChild(img);}
+        const play=document.createElement('div');play.className='thumb-play';play.innerHTML='<span>▶</span>';
+        const src=document.createElement('div');src.className='thumb-src';src.textContent=n.provider==='vimeo'?'Vimeo':'YouTube';
+        thumb.appendChild(play);thumb.appendChild(src);
+        thumb.addEventListener('click',ev=>{ev.stopPropagation();openModal(n.id);});
+        body.appendChild(thumb);
+      } else {
+        const pz=document.createElement('div');pz.className='paste-area';
+        pz.innerHTML='<div class="paste-area-inner"><span style="font-size:20px">🎬</span><span>Coller un lien vidéo</span></div>';
+        pz.addEventListener('click',ev=>{ev.stopPropagation();gUrlEditId=n.id;gUrlDraft='';gUrlErr=null;renderMindmap();setTimeout(()=>{const i=document.querySelector('.url-form input');if(i)i.focus();},0);});
+        body.appendChild(pz);
+      }
+    } else if(isLnk){
+      if(n.url){
+        const lc=document.createElement('a');lc.className='link-card';lc.href=n.url;lc.target='_blank';lc.rel='noopener noreferrer';
+        lc.addEventListener('pointerdown',ev=>ev.stopPropagation());
+        const li=document.createElement('span');li.className='link-icon';li.textContent=linkIcon(n.url);
+        const linfo=document.createElement('div');linfo.className='link-info';
+        linfo.innerHTML='<div class="link-label">Ouvrir le lien</div><div class="link-domain">'+linkDomain(n.url)+'</div>';
+        lc.appendChild(li);lc.appendChild(linfo);body.appendChild(lc);
+      } else {
+        const pz=document.createElement('div');pz.className='paste-area';
+        pz.innerHTML='<div class="paste-area-inner"><span style="font-size:20px">🔗</span><span>Coller un lien</span></div>';
+        pz.addEventListener('click',ev=>{ev.stopPropagation();gUrlEditId=n.id;gUrlDraft='';gUrlErr=null;renderMindmap();setTimeout(()=>{const i=document.querySelector('.url-form input');if(i)i.focus();},0);});
+        body.appendChild(pz);
+      }
+    } else if(isTbl){
+      const rows=n.rows||[];
+      const wrap=document.createElement('div');wrap.className='tbl-wrap';
+      const tbl=document.createElement('table');tbl.className='etbl';
+      const thead=document.createElement('thead');
+      const hr=document.createElement('tr');
+      ['Exercice','Rép.','Notes',''].forEach(h=>{const th=document.createElement('th');th.textContent=h;hr.appendChild(th);});
+      thead.appendChild(hr);tbl.appendChild(thead);
+      const tbody=document.createElement('tbody');
+      rows.forEach((row,ri)=>{
+        const tr=document.createElement('tr');
+        (row||[]).forEach((cell,ci)=>{
+          const td=document.createElement('td');td.contentEditable='true';td.textContent=cell||'';
+          td.addEventListener('pointerdown',ev=>ev.stopPropagation());
+          td.addEventListener('blur',()=>saveCell(n.id,ri,ci,td.textContent.trim()));
+          td.addEventListener('keydown',ev=>{if(ev.key==='Enter'&&!ev.shiftKey){ev.preventDefault();td.blur();}});
+          tr.appendChild(td);
+        });
+        const tdDel=document.createElement('td');tdDel.style.cssText='width:20px;text-align:center';
+        const db=document.createElement('button');db.textContent='×';db.style.cssText='background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:0';
+        db.addEventListener('click',ev=>{ev.stopPropagation();delTableRow(n.id,ri);});
+        tdDel.appendChild(db);tr.appendChild(tdDel);tbody.appendChild(tr);
+      });
+      tbl.appendChild(tbody);wrap.appendChild(tbl);
+      const ab=document.createElement('button');ab.className='add-row';ab.innerHTML='+ Ajouter une ligne';
+      ab.addEventListener('click',ev=>{ev.stopPropagation();addTableRow(n.id);});
+      wrap.appendChild(ab);body.appendChild(wrap);
+    }
+
+    if(body.children.length)el.appendChild(body);
+    nl.appendChild(el);
+  });
+}
+</script>
+</body>
+</html>
