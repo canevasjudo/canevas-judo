@@ -90,6 +90,11 @@ textarea
 .comp-tbl th{background:var(--accent-light);color:var(--accent);font-weight:600}
 .comp-tbl td:first-child{text-align:left;font-weight:600;padding:6px;min-width:80px}
 .comp-tbl input{width:100%;min-width:38px;border:none;background:transparent;text-align:center;font:inherit;color:var(--text);padding:5px 2px}
+.comp-tog{border:1px solid var(--border);background:var(--surface);color:var(--accent);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:13px}
+.comp-body{display:flex;flex-direction:column;gap:10px}
+.comp-card.closed .comp-body{display:none}
+.comp-sum{font-size:13px;color:var(--muted)}
+.comp-card:not(.closed) .comp-sum{display:none}
 .comp-q{font-size:13px;font-weight:600;color:var(--accent);margin-top:4px}
 .comp-card textarea{width:100%;min-height:64px;font:inherit;font-size:14px;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);resize:vertical}
 .comp-tblwrap{overflow-x:auto}
@@ -326,7 +331,7 @@ let gUrlEditId=null, gUrlDraft='', gUrlErr=null;
 let gSaveTimer=null;
 let gCurrentPage=1; // 0=techniques, 1=mindmap, 2=notes
 const PAGE_LABELS=['Techniques','Mindmap','Notes libres','Suivi de compétition'];
-let gComps=[], gCompsJson='[]', gCompTimer=null;
+let gCompClosed={}, gComps=[], gCompsJson='[]', gCompTimer=null;
 
 // ══ Écrans ══
 function showScreen(id){
@@ -507,6 +512,8 @@ const COMP_COLS=[['ippon','Ippon'],['waza','Waza-ari'],['yuko','Yuko'],['kinsa',
 const COMP_TXT=[['worked','Qu\'est-ce qui a fonctionné ?'],['noIppon','Je n\'ai pas marqué ippon parce que ? (manque de contrôle, manque de déséquilibre, pas enchaîné)'],['oppScores','Mon adversaire marque sur moi parce que ?'],['improve','Qu\'est-ce que je dois améliorer ?'],['links','Liens vidéo / remarques']];
 function newComp(){const z=()=>({ippon:'',waza:'',yuko:'',kinsa:'',rien:''});return {id:'c'+Date.now(),name:'',date:'',wins:'',losses:'',thrown:z(),suffered:z(),worked:'',noIppon:'',oppScores:'',improve:'',links:''};}
 function addComp(){gComps.unshift(newComp());renderComps();saveComps();}
+function toggleComp(id,btn){const card=btn.closest('.comp-card');const closed=card.classList.toggle('closed');btn.textContent=closed?'▸':'▾';gCompClosed[id]=closed;}
+function compSummary(c){const w=c.wins||0,l=c.losses||0;return c.date?c.date+' · '+w+'V / '+l+'D':w+'V / '+l+'D';}
 function delComp(id){if(!confirm('Supprimer cette compétition ?'))return;gComps=gComps.filter(c=>c.id!==id);renderComps();saveComps();}
 function compTotal(o){return COMP_COLS.reduce((a,[k])=>a+(parseInt(o[k])||0),0);}
 function compSet(id,path,val){
@@ -532,16 +539,18 @@ function renderComps(){
   if(!gComps.length){list.innerHTML='<div style="text-align:center;color:var(--muted);font-size:14px">Aucune compétition. Appuie sur « Nouvelle compétition ».</div>';return;}
   list.innerHTML=gComps.map(c=>{
     const row=(key,label)=>'<tr><td>'+label+'</td>'+COMP_COLS.map(([k])=>'<td><input type="number" min="0" inputmode="numeric" value="'+escA(c[key][k])+'" oninput="compSet(\''+c.id+'\',\''+key+'.'+k+'\',this.value)"></td>').join('')+'<td id="tot-'+c.id+'-'+key+'"><b>'+compTotal(c[key])+'</b></td></tr>';
-    return '<div class="comp-card">'
-     +'<div class="comp-head"><input class="comp-name" placeholder="Nom de la compétition" value="'+escA(c.name)+'" oninput="compSet(\''+c.id+'\',\'name\',this.value)">'
+    const cl=gCompClosed[c.id];
+    return '<div class="comp-card'+(cl?' closed':'')+'">'
+     +'<div class="comp-head"><button class="comp-tog" onclick="toggleComp(\''+c.id+'\',this)">'+(cl?'▸':'▾')+'</button><input class="comp-name" placeholder="Nom de la compétition" value="'+escA(c.name)+'" oninput="compSet(\''+c.id+'\',\'name\',this.value)">'
      +'<input type="date" value="'+escA(c.date)+'" oninput="compSet(\''+c.id+'\',\'date\',this.value)">'
      +'<button class="btn-del" onclick="delComp(\''+c.id+'\')">🗑</button></div>'
+     +'<div class="comp-sum">'+compSummary(c)+'</div><div class="comp-body">'
      +'<div class="comp-wl"><label>Victoires <input type="number" min="0" inputmode="numeric" value="'+escA(c.wins)+'" oninput="compSet(\''+c.id+'\',\'wins\',this.value)"></label>'
      +'<label>Défaites <input type="number" min="0" inputmode="numeric" value="'+escA(c.losses)+'" oninput="compSet(\''+c.id+'\',\'losses\',this.value)"></label></div>'
      +'<div class="comp-tblwrap"><table class="comp-tbl"><tr><th></th>'+COMP_COLS.map(x=>'<th>'+x[1]+'</th>').join('')+'<th>Total</th></tr>'
      +row('thrown','Attaques lancées')+row('suffered','Attaques subies')+'</table></div>'
      +COMP_TXT.map(([k,q])=>'<div class="comp-q">'+q+'</div><textarea oninput="compSet(\''+c.id+'\',\''+k+'\',this.value)">'+escA(c[k])+'</textarea>').join('')
-     +'</div>';
+     +'</div></div>';
   }).join('');
 }
 
