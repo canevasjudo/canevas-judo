@@ -511,7 +511,7 @@ async function saveTexts(){
 const COMP_COLS=[['ippon','Ippon'],['waza','Waza-ari'],['yuko','Yuko'],['kinsa','Kinsa'],['rien','Rien']];
 const COMP_TXT=[['worked','Qu\'est-ce qui a fonctionné ?'],['noIppon','Je n\'ai pas marqué ippon parce que ? (manque de contrôle, manque de déséquilibre, pas enchaîné)'],['oppScores','Mon adversaire marque sur moi parce que ?'],['improve','Qu\'est-ce que je dois améliorer ?'],['links','Liens vidéo / remarques']];
 function newComp(){const z=()=>({ippon:'',waza:'',yuko:'',kinsa:'',rien:''});return {id:'c'+Date.now(),name:'',date:'',wins:'',losses:'',thrown:z(),suffered:z(),worked:'',noIppon:'',oppScores:'',improve:'',links:''};}
-function addComp(){gComps.unshift(newComp());renderComps();saveComps();}
+function addComp(){const nc=newComp();gCompClosed[nc.id]=false;gComps.unshift(nc);renderComps();saveComps();}
 function toggleComp(id,btn){const card=btn.closest('.comp-card');const closed=card.classList.toggle('closed');btn.textContent=closed?'▸':'▾';gCompClosed[id]=closed;}
 function compSummary(c){const w=c.wins||0,l=c.losses||0;return c.date?c.date+' · '+w+'V / '+l+'D':w+'V / '+l+'D';}
 function delComp(id){if(!confirm('Supprimer cette compétition ?'))return;gComps=gComps.filter(c=>c.id!==id);renderComps();saveComps();}
@@ -539,7 +539,7 @@ function renderComps(){
   if(!gComps.length){list.innerHTML='<div style="text-align:center;color:var(--muted);font-size:14px">Aucune compétition. Appuie sur « Nouvelle compétition ».</div>';return;}
   list.innerHTML=gComps.map(c=>{
     const row=(key,label)=>'<tr><td>'+label+'</td>'+COMP_COLS.map(([k])=>'<td><input type="number" min="0" inputmode="numeric" value="'+escA(c[key][k])+'" oninput="compSet(\''+c.id+'\',\''+key+'.'+k+'\',this.value)"></td>').join('')+'<td id="tot-'+c.id+'-'+key+'"><b>'+compTotal(c[key])+'</b></td></tr>';
-    const cl=gCompClosed[c.id];
+    const cl=gCompClosed[c.id]!==false;
     return '<div class="comp-card'+(cl?' closed':'')+'">'
      +'<div class="comp-head"><button class="comp-tog" onclick="toggleComp(\''+c.id+'\',this)">'+(cl?'▸':'▾')+'</button><input class="comp-name" placeholder="Nom de la compétition" value="'+escA(c.name)+'" oninput="compSet(\''+c.id+'\',\'name\',this.value)">'
      +'<input type="date" value="'+escA(c.date)+'" oninput="compSet(\''+c.id+'\',\'date\',this.value)">'
