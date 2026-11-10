@@ -79,6 +79,20 @@ label{display:block;font-size:13px;font-weight:500;color:var(--muted);margin-bot
 textarea.text-area{width:100%;min-height:120px;border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-size:14px;line-height:1.7;background:var(--surface);color:var(--text);outline:none;resize:none;font-family:inherit;transition:border-color .2s}
 textarea
 textarea
+.comp-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;max-width:800px;width:100%;margin:0 auto;display:flex;flex-direction:column;gap:10px}
+.comp-head{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.comp-head input{font:inherit;padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)}
+.comp-name{flex:1;min-width:160px;font-weight:700}
+.comp-wl{display:flex;gap:14px;flex-wrap:wrap;font-size:14px;align-items:center}
+.comp-wl input{width:56px;font:inherit;padding:6px;border:1px solid var(--border);border-radius:8px;text-align:center;background:var(--bg);color:var(--text)}
+.comp-tbl{width:100%;border-collapse:collapse;font-size:13px}
+.comp-tbl th,.comp-tbl td{border:1px solid var(--border);padding:4px;text-align:center}
+.comp-tbl th{background:var(--accent-light);color:var(--accent);font-weight:600}
+.comp-tbl td:first-child{text-align:left;font-weight:600;padding:6px;min-width:80px}
+.comp-tbl input{width:100%;min-width:38px;border:none;background:transparent;text-align:center;font:inherit;color:var(--text);padding:5px 2px}
+.comp-q{font-size:13px;font-weight:600;color:var(--accent);margin-top:4px}
+.comp-card textarea{width:100%;min-height:64px;font:inherit;font-size:14px;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);resize:vertical}
+.comp-tblwrap{overflow-x:auto}
 .save-status{font-size:12px;color:var(--muted);text-align:right;height:16px;transition:opacity .3s}
 
 /* ── Mindmap ── */
@@ -210,6 +224,7 @@ table.etbl tr:nth-child(even) td{background:#fafaf9}
         <div class="dot" id="dot0"></div>
         <div class="dot active" id="dot1"></div>
         <div class="dot" id="dot2"></div>
+        <div class="dot" id="dot3"></div>
       </div>
     </div>
     <button class="page-arrow" id="next-btn" onclick="changePage(1)">→</button>
@@ -273,6 +288,13 @@ table.etbl tr:nth-child(even) td{background:#fafaf9}
       </div>
     </div>
 
+    <!-- Page 4 : Suivi de compétition -->
+    <div class="text-page" id="page-3">
+      <div style="max-width:800px;width:100%;margin:0 auto"><button class="btn btn-primary btn-sm" onclick="addComp()">➕ Nouvelle compétition</button></div>
+      <div id="comp-list" style="display:flex;flex-direction:column;gap:20px"></div>
+      <div class="save-status" id="save-status-4"></div>
+    </div>
+
   </div>
 </div>
 
@@ -303,7 +325,8 @@ let gCollapsed={};
 let gUrlEditId=null, gUrlDraft='', gUrlErr=null;
 let gSaveTimer=null;
 let gCurrentPage=1; // 0=techniques, 1=mindmap, 2=notes
-const PAGE_LABELS=['Techniques','Mindmap','Notes libres'];
+const PAGE_LABELS=['Techniques','Mindmap','Notes libres','Suivi de compétition'];
+let gComps=[], gCompsJson='[]', gCompTimer=null;
 
 // ══ Écrans ══
 function showScreen(id){
@@ -316,11 +339,11 @@ function showScreen(id){
 
 // ══ Pages ══
 function changePage(dir){
-  gCurrentPage=Math.max(0,Math.min(2,gCurrentPage+dir));
+  gCurrentPage=Math.max(0,Math.min(3,gCurrentPage+dir));
   renderPageNav();
 }
 function renderPageNav(){
-  ['page-0','page-1','page-2'].forEach((id,i)=>{
+  ['page-0','page-1','page-2','page-3'].forEach((id,i)=>{
     const el=document.getElementById(id);
     if(i===gCurrentPage){
       if(id==='page-1') el.classList.add('active');
@@ -330,9 +353,9 @@ function renderPageNav(){
     }
   });
   document.getElementById('page-label').textContent=PAGE_LABELS[gCurrentPage];
-  ['dot0','dot1','dot2'].forEach((id,i)=>document.getElementById(id).classList.toggle('active',i===gCurrentPage));
+  ['dot0','dot1','dot2','dot3'].forEach((id,i)=>document.getElementById(id).classList.toggle('active',i===gCurrentPage));
   document.getElementById('prev-btn').disabled=gCurrentPage===0;
-  document.getElementById('next-btn').disabled=gCurrentPage===2;
+  document.getElementById('next-btn').disabled=gCurrentPage===3;
 }
 
 // ══ Auth ══
@@ -359,7 +382,7 @@ async function doRegister(){
 }
 async function doLogout(){
   if(gUnsub){gUnsub();gUnsub=null;}
-  gRoom=null;gNodes=[];gCollapsed={};
+  gRoom=null;gNodes=[];gCollapsed={};gComps=[];gCompsJson='[]';
   await auth.signOut();
 }
 auth.onAuthStateChanged(u=>{
@@ -460,9 +483,14 @@ function openRoom(code){
     document.getElementById('ta-coach').value=t.coach||'';
     document.getElementById('ta-athlete').value=t.athlete||'';
     renderMindmap();
+    const cj=JSON.stringify(d.competitions||[]);
+    const list=document.getElementById('comp-list');
+    if(cj!==gCompsJson && !list.contains(document.activeElement)){
+      gComps=d.competitions||[];gCompsJson=cj;renderComps();
+    }
   });
 }
-function goJoin(){if(gUnsub){gUnsub();gUnsub=null;}gRoom=null;gNodes=[];gCollapsed={};showScreen('screen-join');loadRooms();}
+function goJoin(){if(gUnsub){gUnsub();gUnsub=null;}gRoom=null;gNodes=[];gCollapsed={};gComps=[];gCompsJson='[]';showScreen('screen-join');loadRooms();}
 function copyCode(){navigator.clipboard.writeText(gRoom).then(()=>alert('Code copié : '+gRoom));}
 
 // ══ Textes ══
@@ -472,6 +500,49 @@ async function saveTexts(){
   const texts={acquired:document.getElementById('ta-acquired').value,progress:document.getElementById('ta-progress').value,wanted:document.getElementById('ta-wanted').value,coach:document.getElementById('ta-coach').value,athlete:document.getElementById('ta-athlete').value};
   await db.collection('rooms').doc(gRoom).update({texts});
   ['save-status-1','save-status-3'].forEach(id=>{const el=document.getElementById(id);if(el){el.textContent='✓ Sauvegardé';el.style.opacity='1';setTimeout(()=>el.style.opacity='0',2000);}});
+}
+
+// ══ Suivi de compétition ══
+const COMP_COLS=[['ippon','Ippon'],['waza','Waza-ari'],['yuko','Yuko'],['kinsa','Kinsa'],['rien','Rien']];
+const COMP_TXT=[['worked','Qu\'est-ce qui a fonctionné ?'],['noIppon','Je n\'ai pas marqué ippon parce que ? (manque de contrôle, manque de déséquilibre, pas enchaîné)'],['oppScores','Mon adversaire marque sur moi parce que ?'],['improve','Qu\'est-ce que je dois améliorer ?'],['links','Liens vidéo / remarques']];
+function newComp(){const z=()=>({ippon:'',waza:'',yuko:'',kinsa:'',rien:''});return {id:'c'+Date.now(),name:'',date:'',wins:'',losses:'',thrown:z(),suffered:z(),worked:'',noIppon:'',oppScores:'',improve:'',links:''};}
+function addComp(){gComps.unshift(newComp());renderComps();saveComps();}
+function delComp(id){if(!confirm('Supprimer cette compétition ?'))return;gComps=gComps.filter(c=>c.id!==id);renderComps();saveComps();}
+function compTotal(o){return COMP_COLS.reduce((a,[k])=>a+(parseInt(o[k])||0),0);}
+function compSet(id,path,val){
+  const c=gComps.find(x=>x.id===id);if(!c)return;
+  if(path.includes('.')){const [a,b]=path.split('.');c[a][b]=val;
+    const tot=document.getElementById('tot-'+id+'-'+a);if(tot)tot.innerHTML='<b>'+compTotal(c[a])+'</b>';}
+  else c[path]=val;
+  scheduleCompSave();
+}
+function scheduleCompSave(){clearTimeout(gCompTimer);gCompTimer=setTimeout(saveComps,1200);}
+async function saveComps(){
+  if(!gRoom)return;
+  gCompsJson=JSON.stringify(gComps);
+  try{
+    await db.collection('rooms').doc(gRoom).update({competitions:gComps});
+    const el=document.getElementById('save-status-4');
+    if(el){el.textContent='✓ Sauvegardé';el.style.opacity='1';setTimeout(()=>el.style.opacity='0',2000);}
+  }catch(e){alert('Erreur de sauvegarde : '+e.message);}
+}
+function escA(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
+function renderComps(){
+  const list=document.getElementById('comp-list');
+  if(!gComps.length){list.innerHTML='<div style="text-align:center;color:var(--muted);font-size:14px">Aucune compétition. Appuie sur « Nouvelle compétition ».</div>';return;}
+  list.innerHTML=gComps.map(c=>{
+    const row=(key,label)=>'<tr><td>'+label+'</td>'+COMP_COLS.map(([k])=>'<td><input type="number" min="0" inputmode="numeric" value="'+escA(c[key][k])+'" oninput="compSet(\''+c.id+'\',\''+key+'.'+k+'\',this.value)"></td>').join('')+'<td id="tot-'+c.id+'-'+key+'"><b>'+compTotal(c[key])+'</b></td></tr>';
+    return '<div class="comp-card">'
+     +'<div class="comp-head"><input class="comp-name" placeholder="Nom de la compétition" value="'+escA(c.name)+'" oninput="compSet(\''+c.id+'\',\'name\',this.value)">'
+     +'<input type="date" value="'+escA(c.date)+'" oninput="compSet(\''+c.id+'\',\'date\',this.value)">'
+     +'<button class="btn-del" onclick="delComp(\''+c.id+'\')">🗑</button></div>'
+     +'<div class="comp-wl"><label>Victoires <input type="number" min="0" inputmode="numeric" value="'+escA(c.wins)+'" oninput="compSet(\''+c.id+'\',\'wins\',this.value)"></label>'
+     +'<label>Défaites <input type="number" min="0" inputmode="numeric" value="'+escA(c.losses)+'" oninput="compSet(\''+c.id+'\',\'losses\',this.value)"></label></div>'
+     +'<div class="comp-tblwrap"><table class="comp-tbl"><tr><th></th>'+COMP_COLS.map(x=>'<th>'+x[1]+'</th>').join('')+'<th>Total</th></tr>'
+     +row('thrown','Attaques lancées')+row('suffered','Attaques subies')+'</table></div>'
+     +COMP_TXT.map(([k,q])=>'<div class="comp-q">'+q+'</div><textarea oninput="compSet(\''+c.id+'\',\''+k+'\',this.value)">'+escA(c[k])+'</textarea>').join('')
+     +'</div>';
+  }).join('');
 }
 
 // ══ Firestore nodes ══
@@ -563,7 +634,7 @@ mm.addEventListener('touchstart',e=>{
     const t=e.touches[0];
     const nodeEl=document.elementFromPoint(t.clientX,t.clientY);
     // Ne pas intercepter les boutons
-    if(nodeEl&&nodeEl.closest('button,a,input,textarea,td,[contenteditable]')) return;
+    if(nodeEl&&nodeEl.closest('button,a,input,textarea,td,[contenteditable],.thumb,.paste-area,.link-card')) return;
     const node=nodeEl?nodeEl.closest('.node'):null;
     if(node){
       // Drag du noeud
