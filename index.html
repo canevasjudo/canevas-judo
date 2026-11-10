@@ -177,15 +177,15 @@ table.etbl tr:nth-child(even) td{background:#fafaf9}
       <button class="auth-tab" onclick="switchAuthTab('register')">Inscription</button>
     </div>
     <div id="tab-login">
-      <label>Email</label><input type="email" id="l-email" placeholder="votre@email.com"/>
-      <label>Mot de passe</label><input type="password" id="l-pwd" placeholder="••••••••"/>
+      <label>Email</label><input type="email" id="l-email" autocomplete="username" placeholder="votre@email.com"/>
+      <label>Mot de passe</label><input type="password" id="l-pwd" autocomplete="current-password" placeholder="••••••••"/>
       <button class="btn btn-primary" onclick="doLogin()">Se connecter</button>
       <div class="err" id="l-err"></div>
     </div>
     <div id="tab-reg" style="display:none">
       <label>Prénom / Pseudo</label><input type="text" id="r-name" placeholder="Coach Martin"/>
-      <label>Email</label><input type="email" id="r-email" placeholder="votre@email.com"/>
-      <label>Mot de passe</label><input type="password" id="r-pwd" placeholder="6 caractères minimum"/>
+      <label>Email</label><input type="email" id="r-email" autocomplete="username" placeholder="votre@email.com"/>
+      <label>Mot de passe</label><input type="password" id="r-pwd" autocomplete="new-password" placeholder="6 caractères minimum"/>
       <button class="btn btn-primary" onclick="doRegister()">Créer mon compte</button>
       <div class="err" id="r-err"></div>
     </div>
@@ -390,6 +390,7 @@ async function doLogout(){
   gRoom=null;gNodes=[];gCollapsed={};gComps=[];gCompsJson='[]';
   await auth.signOut();
 }
+auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{});
 auth.onAuthStateChanged(u=>{
   gUser=u;
   if(!u){showScreen('screen-auth');}
