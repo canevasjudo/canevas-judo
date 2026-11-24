@@ -331,7 +331,7 @@ let gUrlEditId=null, gUrlDraft='', gUrlErr=null;
 let gSaveTimer=null;
 let gCurrentPage=1; // 0=techniques, 1=mindmap, 2=notes
 const PAGE_LABELS=['Techniques','Mindmap','Notes libres','Suivi de compétition'];
-let gCompClosed={}, gComps=[], gCompsJson='[]', gCompTimer=null;
+let gTextDirty=false, gCompDirty=false, gCompClosed={}, gComps=[], gCompsJson='[]', gCompTimer=null;
 
 // ══ Écrans ══
 function showScreen(id){
@@ -344,6 +344,7 @@ function showScreen(id){
 
 // ══ Pages ══
 function changePage(dir){
+  flushSaves();
   gCurrentPage=Math.max(0,Math.min(3,gCurrentPage+dir));
   renderPageNav();
 }
@@ -483,39 +484,54 @@ function openRoom(code){
     gNodes=d.nodes||[];
     document.getElementById('room-name-lbl').textContent=d.name||'Canevas';
     const t=d.texts||{};
+    if(!gTextDirty){
     document.getElementById('ta-acquired').value=t.acquired||'';
     document.getElementById('ta-progress').value=t.progress||'';
     document.getElementById('ta-wanted').value=t.wanted||'';
     document.getElementById('ta-coach').value=t.coach||'';
     document.getElementById('ta-athlete').value=t.athlete||'';
+    }
     renderMindmap();
     const cj=JSON.stringify(d.competitions||[]);
     const list=document.getElementById('comp-list');
-    if(cj!==gCompsJson && !list.contains(document.activeElement)){
+    if(!gCompDirty && cj!==gCompsJson && !list.contains(document.activeElement)){
       gComps=d.competitions||[];gCompsJson=cj;renderComps();
     }
   });
 }
-function goJoin(){if(gUnsub){gUnsub();gUnsub=null;}gRoom=null;gNodes=[];gCollapsed={};gComps=[];gCompsJson='[]';showScreen('screen-join');loadRooms();}
+function goJoin(){flushSaves();if(gUnsub){gUnsub();gUnsub=null;}gRoom=null;gNodes=[];gCollapsed={};gComps=[];gCompsJson='[]';gTextDirty=false;gCompDirty=false;showScreen('screen-join');loadRooms();}
 function copyCode(){navigator.clipboard.writeText(gRoom).then(()=>alert('Code copié : '+gRoom));}
 
 // ══ Textes ══
-function scheduleSave(){clearTimeout(gSaveTimer);gSaveTimer=setTimeout(saveTexts,1200);}
+function scheduleSave(){gTextDirty=true;clearTimeout(gSaveTimer);gSaveTimer=setTimeout(saveTexts,800);}
 async function saveTexts(){
   if(!gRoom)return;
   const texts={acquired:document.getElementById('ta-acquired').value,progress:document.getElementById('ta-progress').value,wanted:document.getElementById('ta-wanted').value,coach:document.getElementById('ta-coach').value,athlete:document.getElementById('ta-athlete').value};
-  await db.collection('rooms').doc(gRoom).update({texts});
-  ['save-status-1','save-status-3'].forEach(id=>{const el=document.getElementById(id);if(el){el.textContent='✓ Sauvegardé';el.style.opacity='1';setTimeout(()=>el.style.opacity='0',2000);}});
+  clearTimeout(gSaveTimer);
+  try{
+    await db.collection('rooms').doc(gRoom).update({texts});
+    gTextDirty=false;
+    ['save-status-1','save-status-3'].forEach(id=>{const el=document.getElementById(id);if(el){el.textContent='✓ Sauvegardé';el.style.opacity='1';setTimeout(()=>el.style.opacity='0',2000);}});
+  }catch(e){alert('Erreur de sauvegarde : '+e.message);}
 }
+
+// ══ Sauvegarde forcée ══
+function flushSaves(){
+  if(gTextDirty) saveTexts();
+  if(gCompDirty) saveComps();
+}
+document.addEventListener('focusout',flushSaves);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)flushSaves();});
+window.addEventListener('pagehide',flushSaves);
 
 // ══ Suivi de compétition ══
 const COMP_COLS=[['ippon','Ippon'],['waza','Waza-ari'],['yuko','Yuko'],['kinsa','Kinsa'],['rien','Rien']];
 const COMP_TXT=[['worked','Qu\'est-ce qui a fonctionné ?'],['noIppon','Je n\'ai pas marqué ippon parce que ? (manque de contrôle, manque de déséquilibre, pas enchaîné)'],['oppScores','Mon adversaire marque sur moi parce que ?'],['improve','Qu\'est-ce que je dois améliorer ?'],['links','Liens vidéo / remarques']];
 function newComp(){const z=()=>({ippon:'',waza:'',yuko:'',kinsa:'',rien:''});return {id:'c'+Date.now(),name:'',date:'',wins:'',losses:'',thrown:z(),suffered:z(),worked:'',noIppon:'',oppScores:'',improve:'',links:''};}
-function addComp(){const nc=newComp();gCompClosed[nc.id]=false;gComps.unshift(nc);renderComps();saveComps();}
+function addComp(){gCompDirty=true;const nc=newComp();gCompClosed[nc.id]=false;gComps.unshift(nc);renderComps();saveComps();}
 function toggleComp(id,btn){const card=btn.closest('.comp-card');const closed=card.classList.toggle('closed');btn.textContent=closed?'▸':'▾';gCompClosed[id]=closed;}
 function compSummary(c){const w=c.wins||0,l=c.losses||0;return c.date?c.date+' · '+w+'V / '+l+'D':w+'V / '+l+'D';}
-function delComp(id){if(!confirm('Supprimer cette compétition ?'))return;gComps=gComps.filter(c=>c.id!==id);renderComps();saveComps();}
+function delComp(id){if(!confirm('Supprimer cette compétition ?'))return;gCompDirty=true;gComps=gComps.filter(c=>c.id!==id);renderComps();saveComps();}
 function compTotal(o){return COMP_COLS.reduce((a,[k])=>a+(parseInt(o[k])||0),0);}
 function compSet(id,path,val){
   const c=gComps.find(x=>x.id===id);if(!c)return;
@@ -524,12 +540,14 @@ function compSet(id,path,val){
   else c[path]=val;
   scheduleCompSave();
 }
-function scheduleCompSave(){clearTimeout(gCompTimer);gCompTimer=setTimeout(saveComps,1200);}
+function scheduleCompSave(){gCompDirty=true;clearTimeout(gCompTimer);gCompTimer=setTimeout(saveComps,800);}
 async function saveComps(){
   if(!gRoom)return;
+  clearTimeout(gCompTimer);
   gCompsJson=JSON.stringify(gComps);
   try{
     await db.collection('rooms').doc(gRoom).update({competitions:gComps});
+    gCompDirty=false;
     const el=document.getElementById('save-status-4');
     if(el){el.textContent='✓ Sauvegardé';el.style.opacity='1';setTimeout(()=>el.style.opacity='0',2000);}
   }catch(e){alert('Erreur de sauvegarde : '+e.message);}
